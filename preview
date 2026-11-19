@@ -1,0 +1,513 @@
+import streamlit as st
+
+# 페이지 기본 설정
+st.set_page_config(page_title="나만의 학습게임 기획하기", page_icon="🎮", layout="wide")
+
+# ══════════════════════════════════════════════════════════
+#  디자인 콘셉트: '모눈종이 위에 붙인 스티커'
+#   · 윤곽선과 글자는 진한 남보라(INK) 하나로 통일하고,
+#   · 색은 의미를 따라간다. 단계·입력칸·게임 종류마다 자기 색이 있다.
+# ══════════════════════════════════════════════════════════
+INK = "#2F2A73"
+SOFT = "#6B66A8"
+
+# 이름: (진한 색, 연한 색, 진한 색 위에 올릴 글자색)
+PALETTE = {
+    "coral":  ("#FF6B81", "#FFE1E6", INK),
+    "orange": ("#FF9F43", "#FFE8CF", INK),
+    "sun":    ("#FFD43B", "#FFF3BD", INK),
+    "green":  ("#4CD787", "#D9F7E5", INK),
+    "mint":   ("#2EDCC0", "#D2F8F1", INK),
+    "sky":    ("#4DB8FF", "#D9F0FF", INK),
+    "violet": ("#7A5AF8", "#ECE6FF", "#FFFFFF"),
+    "pink":   ("#FF8FD0", "#FFE2F4", INK),
+}
+
+# 게임 종류 8가지, 학년 6단계가 차례로 입을 색
+TYPE_COLORS = ["sun", "coral", "orange", "green", "sky", "violet", "pink", "mint"]
+GRADE_COLORS = ["coral", "orange", "sun", "green", "sky", "violet"]
+# 입력칸 이름표 색 (아래 '완성도'의 칸 색과 같다)
+FIELD_COLORS = {
+    "w_type": "sun", "w_grade": "green", "w_title": "coral",
+    "w_topic": "sky", "w_rules": "orange", "w_design": "violet",
+}
+STEP_COLORS = ["coral", "violet", "green"]
+
+
+def swatch(name):
+    """요소 하나에 색 하나를 입히는 CSS 변수 묶음"""
+    return f"--c:var(--{name});--cl:var(--{name}-l);--tx:var(--{name}-t);"
+
+
+def chip_css(key, names):
+    """라디오 선택지(칩)를 순서대로 다른 색으로"""
+    return "".join(
+        f'.stApp .st-key-{key} [role="radiogroup"]>label:nth-child({i}){{{swatch(n)}}}'
+        for i, n in enumerate(names, 1)
+    )
+
+
+FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap');"
+
+DYNAMIC_CSS = (
+    f":root{{--ink:{INK};--soft:{SOFT};"
+    + "".join(f"--{n}:{c};--{n}-l:{l};--{n}-t:{t};" for n, (c, l, t) in PALETTE.items())
+    + "}"
+    + "".join(f".stApp .st-key-{k}{{{swatch(v)}}}" for k, v in FIELD_COLORS.items())
+    + "".join(f".stApp .st-key-panel{i}{{{swatch(v)}}}" for i, v in enumerate(STEP_COLORS, 1))
+    + chip_css("w_type", TYPE_COLORS)
+    + chip_css("w_grade", GRADE_COLORS)
+)
+
+STATIC_CSS = """
+:root{
+  --bw:3px;
+  --font-display:'Jua','Gowun Dodum','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --font-body:'Gowun Dodum','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+}
+
+/* 바탕: 모눈종이 */
+.stApp{
+  font-family:var(--font-body) !important;
+  color:var(--ink) !important;
+  background-color:#FBFCFF !important;
+  background-image:
+    linear-gradient(#E3E9FF 1.5px,transparent 1.5px),
+    linear-gradient(90deg,#E3E9FF 1.5px,transparent 1.5px) !important;
+  background-size:34px 34px;
+}
+.stApp [data-testid="stAppViewContainer"],
+.stApp [data-testid="stMain"]{ background:transparent !important; }
+.stApp [data-testid="stHeader"]{ background:transparent !important; }
+.stApp [data-testid="stHeader"] *{ color:var(--ink); }
+.stApp footer{ visibility:hidden; }
+.stApp [data-testid="stMainBlockContainer"],
+.stApp .block-container{ max-width:1120px; padding:2.4rem 1.6rem 5rem; }
+.stApp ::selection{ background:var(--sun); color:var(--ink); }
+.stApp [data-testid="stMarkdownContainer"]{ color:var(--ink); }
+
+/* 맨 위 제목: 글자 블록 */
+.stApp .hero{ text-align:center; padding:.4rem 0 .8rem; }
+.stApp .hero .hero-title{
+  display:flex; flex-wrap:wrap; justify-content:center; gap:1.1rem 2.2rem;
+  margin:0; padding:0; line-height:1;
+}
+.stApp .hero .word{ display:flex; gap:.5rem; }
+.stApp .hero .tile{
+  display:grid; place-items:center; width:3.7rem; height:4.2rem;
+  font-family:var(--font-display); font-size:2.6rem; line-height:1; color:var(--tx);
+  background:var(--c); border:var(--bw) solid var(--ink); border-radius:16px;
+  box-shadow:0 6px 0 var(--ink); transform:rotate(var(--r));
+}
+.stApp .hero .tagline{
+  display:inline-flex; align-items:center; gap:.55rem; margin-top:1.9rem; padding:.45rem 1.3rem;
+  font-family:var(--font-display); font-size:1.3rem; color:var(--ink);
+  background:var(--sun); border:var(--bw) solid var(--ink); border-radius:999px;
+  box-shadow:0 4px 0 var(--ink); transform:rotate(-1.5deg);
+}
+
+/* 단계 제목 */
+.stApp .step-header{ display:flex; align-items:center; flex-wrap:wrap; gap:.4rem 1rem; margin:2.8rem 0 1.5rem; }
+.stApp .step-header .badge{
+  font-family:var(--font-display); font-size:1.15rem; line-height:1.4; color:var(--tx);
+  background:var(--c); border:var(--bw) solid var(--ink); border-radius:14px;
+  padding:.2rem 1rem; box-shadow:0 4px 0 var(--ink); transform:rotate(-3deg);
+}
+.stApp .step-header .step-title{
+  font-family:var(--font-display); font-size:1.95rem; line-height:1.3; color:var(--ink);
+  text-decoration:underline wavy var(--c); text-decoration-thickness:4px; text-underline-offset:7px;
+}
+
+/* 단계별 종이 */
+.stApp [class*="st-key-panel"]{
+  gap:1.2rem; padding:1.8rem 1.8rem 2rem; background:#fff;
+  border:var(--bw) solid var(--ink); border-radius:28px; box-shadow:9px 9px 0 var(--c);
+}
+
+/* (같은 이름표가 겹쳐 붙는 Streamlit 버전에서도 테두리가 두 번 그려지지 않게) */
+.stApp [class*="st-key-panel"] [class*="st-key-panel"]{
+  padding:0; border:0; border-radius:0; box-shadow:none; background:transparent;
+}
+
+/* 말풍선 도우미 */
+.stApp .bubble{ display:flex; align-items:center; gap:1rem; }
+.stApp .bubble .mascot{
+  flex:none; display:grid; place-items:center; width:3.1rem; height:3.1rem; font-size:1.7rem;
+  background:var(--c); border:var(--bw) solid var(--ink); border-radius:50%;
+}
+.stApp .bubble p{
+  position:relative; margin:0; padding:.65rem 1.1rem; font-size:1.05rem; line-height:1.55;
+  background:var(--cl); border:var(--bw) solid var(--ink); border-radius:18px;
+}
+.stApp .bubble p::before{
+  content:""; position:absolute; left:-11px; top:50%; width:16px; height:16px;
+  background:var(--cl); border-left:var(--bw) solid var(--ink); border-bottom:var(--bw) solid var(--ink);
+  transform:translateY(-50%) rotate(45deg);
+}
+
+/* 입력칸 이름표 */
+.stApp [class*="st-key-w_"] [data-testid="stWidgetLabel"]{ margin-bottom:.35rem; }
+.stApp [class*="st-key-w_"] [data-testid="stWidgetLabel"] p{
+  display:inline-block; margin:0; padding:.1rem .85rem; font-family:var(--font-display);
+  font-size:1.12rem; line-height:1.5; color:var(--tx); background:var(--c);
+  border:var(--bw) solid var(--ink); border-radius:12px 12px 12px 4px; box-shadow:3px 3px 0 var(--ink);
+}
+
+/* 글 쓰는 칸 */
+.stApp [data-baseweb="input"],
+.stApp [data-baseweb="textarea"]{
+  background:#fff !important; border:var(--bw) solid var(--ink) !important; border-radius:16px !important;
+  box-shadow:0 4px 0 var(--ink); transition:box-shadow .12s;
+}
+.stApp [data-baseweb="base-input"]{ background:transparent !important; border-radius:16px !important; }
+.stApp [data-baseweb="input"]:focus-within,
+.stApp [data-baseweb="textarea"]:focus-within{
+  border-color:var(--ink) !important; box-shadow:0 4px 0 var(--ink), 0 0 0 6px var(--violet-l) !important;
+}
+.stApp input, .stApp textarea{
+  font-family:var(--font-body) !important; font-size:1.05rem !important;
+  color:var(--ink) !important; background:transparent !important;
+}
+.stApp input::placeholder, .stApp textarea::placeholder{ color:#9B97C9 !important; opacity:1 !important; }
+
+/* 선택 칩 (게임 종류·학년) */
+.stApp :is(.st-key-w_type, .st-key-w_grade) [role="radiogroup"]{
+  display:flex; flex-wrap:wrap; gap:.85rem .6rem; padding:.25rem .15rem .55rem;
+}
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"]{
+  margin:0 !important; padding:.3rem 1rem !important; cursor:pointer;
+  background:var(--cl); border:var(--bw) solid var(--ink); border-radius:999px; box-shadow:0 4px 0 var(--ink);
+  transition:transform .12s, box-shadow .12s, background-color .12s;
+}
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"] > div:first-child:not(:has([data-testid="stMarkdownContainer"])),
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"] > span:first-child{ display:none !important; }
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"] > div:last-child{ margin:0 !important; padding:0 !important; }
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"] p{
+  margin:0; font-family:var(--font-display); font-size:1.08rem; line-height:1.45; color:var(--ink);
+}
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"]:hover{ transform:translateY(-2px); box-shadow:0 6px 0 var(--ink); }
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"]:has(input:checked),
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"]:has(input:checked):hover{
+  background:var(--c); transform:translateY(3px); box-shadow:0 1px 0 var(--ink);
+}
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"]:has(input:checked) p{ color:var(--tx); }
+.stApp :is(.st-key-w_type, .st-key-w_grade) label[data-baseweb="radio"]:has(input:focus-visible){
+  outline:3px solid var(--violet); outline-offset:3px;
+}
+
+/* 추천 학습 주제 */
+.stApp .reco{
+  padding:1.15rem 1.15rem 1.05rem; background:var(--sky-l);
+  border:var(--bw) dashed var(--ink); border-radius:22px;
+}
+.stApp .reco .reco-title{ margin:0 0 .35rem; font-family:var(--font-display); font-size:1.35rem; line-height:1.35; }
+.stApp .reco .hint{ margin:0 0 1rem; font-size:.98rem; line-height:1.55; color:var(--soft); }
+.stApp .reco .topic{
+  display:flex; align-items:center; gap:.65rem; margin:0 0 .7rem; padding:.55rem .75rem;
+  background:#fff; border:var(--bw) solid var(--ink); border-radius:14px; box-shadow:0 3px 0 var(--ink);
+}
+.stApp .reco .tag{
+  flex:none; padding:.05rem .65rem; font-family:var(--font-display); font-size:1.02rem; color:var(--tx);
+  background:var(--c); border:2.5px solid var(--ink); border-radius:10px;
+}
+.stApp .reco .topic span:last-child{ flex:1; line-height:1.4; }
+.stApp .reco .note{ margin:1rem 0 0; font-size:.86rem; line-height:1.55; color:var(--soft); }
+
+/* 기획서 완성도 */
+.stApp .gauge{
+  margin-top:1.2rem; padding:1rem 1.1rem 1.1rem; background:#fff;
+  border:var(--bw) solid var(--ink); border-radius:22px; box-shadow:0 5px 0 var(--ink);
+}
+.stApp .gauge-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:.75rem; font-family:var(--font-display); }
+.stApp .gauge-head .t{ font-size:1.2rem; }
+.stApp .gauge-head .n{ font-size:1.55rem; }
+.stApp .segs{ display:grid; grid-template-columns:repeat(2,1fr); gap:.55rem; }
+.stApp .seg{
+  padding:.1rem .6rem; text-align:center; font-family:var(--font-display); font-size:1.02rem; color:var(--soft);
+  border:var(--bw) dashed #B9B6DD; border-radius:999px;
+}
+.stApp .seg.on{ color:var(--tx); background:var(--c); border:var(--bw) solid var(--ink); }
+.stApp .gauge-msg{ margin:.85rem 0 0; font-size:.98rem; line-height:1.55; }
+
+/* 안내 쪽지 */
+.stApp .note-box{
+  padding:.75rem 1.1rem; font-size:1.02rem; line-height:1.55;
+  background:var(--sky-l); border:var(--bw) solid var(--ink); border-radius:16px;
+}
+
+/* 프롬프트 상자 */
+.stApp [data-testid="stCode"],
+.stApp [data-testid="stCodeBlock"],
+.stApp .stCode{
+  background:var(--violet-l) !important; border:var(--bw) solid var(--ink); border-radius:20px;
+  box-shadow:0 5px 0 var(--ink); overflow:hidden;
+}
+.stApp [data-testid="stCode"] pre,
+.stApp [data-testid="stCodeBlock"] pre,
+.stApp .stCode pre{ background:transparent !important; padding:1.25rem 1.4rem 1.35rem !important; margin:0; }
+.stApp [data-testid="stCode"] code,
+.stApp [data-testid="stCode"] code span,
+.stApp [data-testid="stCodeBlock"] code,
+.stApp [data-testid="stCodeBlock"] code span,
+.stApp .stCode code, .stApp .stCode code span{
+  font-family:var(--font-body) !important; font-size:1.02rem !important; line-height:1.8 !important;
+  color:var(--ink) !important; white-space:pre-wrap !important; overflow-wrap:anywhere; word-break:keep-all;
+}
+.stApp [data-testid="stCode"] button,
+.stApp [data-testid="stCodeBlock"] button,
+.stApp .stCode button{
+  opacity:1 !important; color:var(--ink) !important; background:var(--sun) !important;
+  border:2.5px solid var(--ink) !important; border-radius:10px !important;
+}
+
+/* 제미나이 열기 버튼 */
+.stApp .stButton, .stApp .st-key-w_gemini{ width:100% !important; }
+.stApp .stButton > button{
+  width:100% !important; min-height:3.6rem; padding:.7rem 1.2rem;
+  font-family:var(--font-display); color:var(--ink) !important; background:var(--sun) !important;
+  border:var(--bw) solid var(--ink) !important; border-radius:20px; box-shadow:0 6px 0 var(--ink);
+  transition:transform .12s, box-shadow .12s, background-color .12s;
+}
+.stApp .stButton > button p{ font:inherit; font-size:1.4rem; margin:0; color:var(--ink); }
+.stApp .stButton > button:hover{ background:#FFDF63 !important; transform:translateY(-2px); box-shadow:0 8px 0 var(--ink); }
+.stApp .stButton > button:active{ transform:translateY(4px); box-shadow:0 2px 0 var(--ink); }
+.stApp .stButton > button:focus-visible{ outline:3px solid var(--violet); outline-offset:3px; }
+
+/* 만드는 순서 카드 */
+.stApp .guide-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:1.2rem; }
+.stApp .guide-card{
+  padding:1.05rem 1.15rem 1.2rem; background:var(--cl);
+  border:var(--bw) solid var(--ink); border-radius:20px; box-shadow:0 5px 0 var(--ink);
+}
+.stApp .guide-card .num{
+  display:grid; place-items:center; width:2.6rem; height:2.6rem; margin-bottom:.7rem;
+  font-family:var(--font-display); font-size:1.35rem; color:var(--tx);
+  background:var(--c); border:var(--bw) solid var(--ink); border-radius:50%;
+}
+.stApp .guide-card p{ margin:0; font-size:1.03rem; line-height:1.65; }
+
+/* 실행 방법 쪽지 */
+.stApp .howto{
+  margin-top:1.5rem; padding:1.25rem 1.4rem 1.4rem; background:var(--sun-l);
+  border:var(--bw) solid var(--ink); border-radius:22px;
+}
+.stApp .howto .howto-title{ margin:0 0 1rem; font-family:var(--font-display); font-size:1.4rem; line-height:1.4; }
+.stApp .howto ol{ display:grid; gap:.8rem; margin:0; padding:0; list-style:none; counter-reset:n; }
+.stApp .howto li{ position:relative; min-height:2.2rem; margin:0; padding:.15rem 0 .1rem 3rem; line-height:1.7; counter-increment:n; }
+.stApp .howto li::before{
+  content:counter(n); position:absolute; left:0; top:0; display:grid; place-items:center;
+  width:2.2rem; height:2.2rem; font-family:var(--font-display); font-size:1.1rem; color:var(--tx);
+  background:var(--c); border:var(--bw) solid var(--ink); border-radius:50%;
+}
+.stApp .howto li:nth-child(1){ --c:var(--coral); --tx:var(--coral-t); }
+.stApp .howto li:nth-child(2){ --c:var(--orange); --tx:var(--orange-t); }
+.stApp .howto li:nth-child(3){ --c:var(--green); --tx:var(--green-t); }
+.stApp .howto li:nth-child(4){ --c:var(--sky); --tx:var(--sky-t); }
+.stApp .howto li:nth-child(5){ --c:var(--violet); --tx:var(--violet-t); }
+.stApp .howto li:nth-child(6){ --c:var(--pink); --tx:var(--pink-t); }
+.stApp .howto code{
+  padding:.05rem .55rem; font-size:.95em; color:var(--ink); background:#fff;
+  border:2.5px solid var(--ink); border-radius:8px;
+}
+
+/* 좁은 화면 */
+@media (max-width:640px){
+  .stApp [data-testid="stMainBlockContainer"], .stApp .block-container{ padding:1.4rem .9rem 4rem; }
+  .stApp .hero .hero-title{ gap:.9rem 1.3rem; }
+  .stApp .hero .word{ gap:.35rem; }
+  .stApp .hero .tile{ width:2.6rem; height:3rem; font-size:1.75rem; border-radius:12px; box-shadow:0 4px 0 var(--ink); }
+  .stApp .hero .tagline{ font-size:1.1rem; padding:.4rem 1rem; }
+  .stApp .step-header{ margin:2.2rem 0 1.2rem; }
+  .stApp .step-header .step-title{ font-size:1.5rem; }
+  .stApp [class*="st-key-panel"]{ padding:1.15rem 1rem 1.4rem; border-radius:22px; box-shadow:6px 6px 0 var(--c); }
+  .stApp .bubble .mascot{ width:2.6rem; height:2.6rem; font-size:1.4rem; }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .stApp *{ transition:none !important; }
+}
+"""
+
+st.markdown("<style>" + FONT_IMPORT + DYNAMIC_CSS + STATIC_CSS + "</style>", unsafe_allow_html=True)
+
+
+# ── 화면을 꾸미는 작은 도우미 함수들 ──────────────────────
+def put_html(markup):
+    """HTML을 한 줄로 이어 붙여서 내보낸다 (줄바꿈·들여쓰기가 코드 블록으로 오해되지 않게)"""
+    st.markdown(" ".join(markup.split()), unsafe_allow_html=True)
+
+
+def panel(key):
+    """단계별 종이 한 장. 오래된 Streamlit이면 색 없이 그냥 묶기만 한다."""
+    try:
+        return st.container(key=key)
+    except TypeError:
+        return st.container()
+
+
+def step_header(number, title, color):
+    put_html(
+        f'<div class="step-header" style="{swatch(color)}">'
+        f'<span class="badge">STEP {number}</span><span class="step-title">{title}</span></div>'
+    )
+
+
+def bubble(text, color):
+    put_html(f'<div class="bubble" style="{swatch(color)}"><span class="mascot">🤖</span><p>{text}</p></div>')
+
+
+def hero():
+    words = ["나만의", "학습게임", "기획하기"]
+    colors = ["sun", "coral", "sky", "green", "violet", "orange", "pink", "mint", "sun", "coral", "sky"]
+    tilts = [-4, 3, -2, 4, -3, 2, -4, 3, -2, 4, -3]
+    i, groups = 0, []
+    for word in words:
+        tiles = ""
+        for ch in word:
+            tiles += f'<span class="tile" aria-hidden="true" style="{swatch(colors[i])}--r:{tilts[i]}deg">{ch}</span>'
+            i += 1
+        groups.append(f'<span class="word">{tiles}</span>')
+    put_html(
+        '<div class="hero">'
+        f'<div class="hero-title" role="heading" aria-level="1" aria-label="{" ".join(words)}">{"".join(groups)}</div>'
+        '<div class="tagline">🎮 기획은 내가, 코딩은 AI가!</div>'
+        '</div>'
+    )
+
+
+def gauge(filled):
+    """제목·주제·규칙·디자인 네 칸 중 몇 칸을 채웠는지 보여준다"""
+    parts = [("제목", "coral"), ("주제", "sky"), ("규칙", "orange"), ("디자인", "violet")]
+    segs = "".join(
+        f'<span class="seg{" on" if ok else ""}" style="{swatch(color)}">{"✓ " if ok else ""}{name}</span>'
+        for (name, color), ok in zip(parts, filled)
+    )
+    done = sum(filled)
+    if done == 0:
+        msg = "아직 비어 있어요. 게임 제목부터 정해볼까요?"
+    elif done < 4:
+        msg = f"좋아요! {4 - done}칸만 더 채우면 기획서 완성!"
+    else:
+        msg = "🎉 기획서 완성! 아래 STEP 2에서 프롬프트를 복사해요."
+    put_html(
+        '<div class="gauge">'
+        f'<div class="gauge-head"><span class="t">내 기획서 완성도</span><span class="n">{done}/4</span></div>'
+        f'<div class="segs">{segs}</div><p class="gauge-msg">{msg}</p></div>'
+    )
+
+
+hero()
+
+# --- STEP 1 ---
+step_header(1, "나만의 게임 기획하기", STEP_COLORS[0])
+
+with panel("panel1"):
+    bubble("빈칸을 채워서 재미있는 게임을 만들어보세요. 예시가 들어가 있어요.", STEP_COLORS[0])
+
+    col1, col2 = st.columns([2, 1], gap="large")
+
+    with col1:
+        game_type = st.radio(
+            "🎮 게임 종류",
+            ["📝 퀴즈", "⚔️ 액션", "🎲 보드", "🗺️ 어드벤처", "🧩 퍼즐", "⌨️ 타이핑", "⏱️ 타이머 경쟁", "🚪 방탈출"],
+            horizontal=True,
+            key="w_type",
+        )
+
+        grade = st.radio(
+            "🎒 학년 수준",
+            ["1학년", "2학년", "3학년", "4학년", "5학년", "6학년"],
+            index=5,
+            horizontal=True,
+            key="w_grade",
+        )
+
+        # value 속성을 placeholder로 변경하여 흐린 글씨로 나타나도록 수정
+        title_input = st.text_input("🏷️ 게임 제목", placeholder="예: 역사 히어로즈 대작전", key="w_title")
+        topic_input = st.text_area("📚 학습 주제", placeholder="예: 우리나라 역사 인물 알아보기 (단군왕검, 세종대왕, 이순신 등)", key="w_topic")
+        rules_input = st.text_area("📜 게임 규칙 및 방법", placeholder="예: 각 스테이지마다 역사 인물에 대한 퀴즈가 나오고, 맞히면 다음 단계로 넘어감. 틀리면 목숨이 줄어듦. 총 3번 틀리면 게임 오버.", key="w_rules")
+        design_input = st.text_input("🎨 디자인 스타일", placeholder="예: 레트로 픽셀 아트 스타일, 배경음악은 웅장하게", key="w_design")
+
+        # 사용자가 아무것도 입력하지 않았을 때 들어갈 기본값(프롬프트용)
+        title = title_input if title_input else "[제목을 입력해주세요]"
+        topic = topic_input if topic_input else "[주제를 입력해주세요]"
+        rules = rules_input if rules_input else "[게임 규칙을 입력해주세요]"
+        design = design_input if design_input else "[디자인 스타일을 입력해주세요]"
+
+    with col2:
+        put_html(f'''
+        <div class="reco">
+            <div class="reco-title">{grade} 추천 학습 주제</div>
+            <p class="hint">스스로 학습 주제를 정하기 어렵다면 활용해보세요.</p>
+            <div class="topic" style="{swatch('pink')}"><span class="tag">국어</span><span>우리말의 구조와 쓰임</span></div>
+            <div class="topic" style="{swatch('green')}"><span class="tag">과학</span><span>우리 몸의 구조와 기능</span></div>
+            <div class="topic" style="{swatch('orange')}"><span class="tag">역사</span><span>조선시대의 문화와 과학 발전</span></div>
+            <p class="note">💡 작성하신 내용, 특히, 칸에 쓰인 모든 의견장에는 추천 정보입니다.</p>
+        </div>
+        ''')
+        gauge([bool(x.strip()) for x in (title_input, topic_input, rules_input, design_input)])
+
+
+# --- STEP 2 ---
+step_header(2, "게임 제작 프롬프트 복사하기", STEP_COLORS[1])
+
+# 프롬프트 생성
+clean_game_type = game_type.split(" ")[1]  # 이모지 제거
+
+prompt_text = f'''너는 훌륭하고 실력 있는 게임 개발 프로그래머야. 초등학생 {grade} 수준에 맞게 좋아하는 요소들과 학습을 결합해 즐길 수 있는 재미있는 웹 기반 게임을 만들어야 해. HTML, CSS, JavaScript 코드를 합쳐서 하나의 HTML 파일 코드로 결과를 완성해서 보여줘.
+
+[게임 기획]
+- 게임 제목: {title}
+- 학습 주제: {topic}
+- 게임 규칙 및 방법: {rules}
+- 디자인 스타일: {design}
+- 게임 종류: {clean_game_type}
+- 학년 수준: 초등학생 {grade} (이 수준의 학생이 이해하고 즐길 수 있도록 만들어 줘)
+
+[코드 작성 시 필수 조건]
+- 코드는 반드시 분리하지 말고 하나의 index.html 파일 안에 HTML, CSS, JS가 모두 포함되도록 작성해 줘.
+
+[세부 개발 조건]
+1. 모바일 기기에서도 화면이 깨지지 않고 잘 보이도록 반응형으로 만들어 줘.
+2. 게임 시작 전 타이틀 화면이 있어야 하며, '게임 시작' 버튼을 만들어 줘.
+3. 점수나 남은 시간, 목숨 등을 화면 상단에 잘 보이게 표시해 줘.
+4. 정답을 맞추거나 틀렸을 때 시각적인 효과나 색상 변화를 줘서 바로 알 수 있게 해 줘.
+5. 게임이 끝나면 최종 점수와 함께 '다시 하기' 버튼이 나타나게 해 줘.
+6. 디자인은 제시한 스타일에 맞게 최대한 예쁘고 가독성 좋게 꾸며 줘.
+7. 필요한 이미지가 있다면 CSS 속성을 이용해 직접 그리거나 이모지를 활용해 줘.
+8. 배경색, 글꼴색 등은 눈이 편안한 색상 조합을 사용해 줘.
+9. 코드 실행은 간단하게 구동 가능하며, 실행 가능한 전체 코드를 코드 블록에 넣어 줘.
+'''
+
+with panel("panel2"):
+    bubble("내가 쓴 내용을 기반으로 AI에게 명령할 프롬프트가 완성되었어요!", STEP_COLORS[1])
+    put_html('<div class="note-box">💡 아래 코드 박스 우측 상단의 📋 버튼을 누르면 프롬프트가 복사됩니다.</div>')
+    st.code(prompt_text, language="markdown")
+
+    if st.button("🌟 제미나이(Gemini) 열기", key="w_gemini"):
+        st.markdown('<meta http-equiv="refresh" content="0; url=https://gemini.google.com/">', unsafe_allow_html=True)
+
+
+# --- STEP 3 ---
+step_header(3, "게임 제작 방법 안내", STEP_COLORS[2])
+
+with panel("panel3"):
+    put_html(f'''
+    <div class="guide-grid">
+        <div class="guide-card" style="{swatch('coral')}"><div class="num">1</div><p>만들고 싶은 게임을 기획한다.</p></div>
+        <div class="guide-card" style="{swatch('sun')}"><div class="num">2</div><p>게임 제목, 규칙/방법 내용, 규칙, 디자인을 정한다.</p></div>
+        <div class="guide-card" style="{swatch('green')}"><div class="num">3</div><p>작성된 제작 프롬프트를 복사하여 AI(제미나이 등)에게 명령을 내린다.</p></div>
+        <div class="guide-card" style="{swatch('sky')}"><div class="num">4</div><p>제미나이가 만들어준 코드를 복사해서 HTML 파일을 만들어 확인하고 수정한다.</p></div>
+    </div>
+    <div class="howto">
+        <div class="howto-title">💡 제미나이가 만든 코드로 게임 실행하기</div>
+        <ol>
+            <li>제미나이가 만든 HTML 코드를 우측 상단의 <strong>복사 버튼</strong>을 눌러 복사합니다.</li>
+            <li>컴퓨터(PC) 바탕화면에서 마우스 우클릭 후 <strong>새로 만들기 &gt; 텍스트 문서</strong>를 선택합니다.</li>
+            <li>텍스트 문서(메모장)를 열고 복사한 코드를 <strong>붙여넣기(Ctrl+V)</strong> 합니다.</li>
+            <li>상단 메뉴에서 <strong>파일 &gt; 다른 이름으로 저장</strong>을 클릭합니다.</li>
+            <li>파일 이름을 <code>game.html</code>로 적고, 파일 형식은 '모든 파일'로 변경 후 저장합니다.</li>
+            <li>저장된 <code>game.html</code> 파일을 더블클릭하면 웹 브라우저에서 나만의 게임이 실행됩니다!</li>
+        </ol>
+    </div>
+    ''')
